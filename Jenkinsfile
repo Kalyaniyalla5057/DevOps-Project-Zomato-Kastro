@@ -94,11 +94,11 @@ pipeline {
     steps {
 
         sh '''
-        dependency-check.sh \
-        --project zomato-kastro \
-        --scan . \
-        --format XML \
-        --out dependency-check-report
+        /opt/dependency-check-tool/bin/dependency-check.sh \
+--project zomato-kastro \
+--scan . \
+--format XML \
+--out dependency-check-report
         '''
 
     }
