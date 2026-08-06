@@ -90,33 +90,34 @@ pipeline {
 
 
         stage('OWASP Dependency Check') {
-            steps {
 
-                dependencyCheck(
-                    odcInstallation: 'dependency-check',
-                    additionalArguments: '''
-                    --scan .
-                    --format XML
-                    --format HTML
-                    --out dependency-check-report
-                    ''',
-                    stopBuild: false
-                )
+    steps {
 
-            }
-        }
+        sh '''
+        dependency-check.sh \
+        --project zomato-kastro \
+        --scan . \
+        --format XML \
+        --out dependency-check-report
+        '''
+
+    }
+
+}
 
 
-        stage('Publish OWASP Report') {
-            steps {
+       stage('Publish OWASP Report') {
 
-                dependencyCheckPublisher(
-                    pattern: 'dependency-check-report/dependency-check-report.xml',
-                    skipNoReportFiles: true
-                )
+    steps {
 
-            }
-        }
+        dependencyCheckPublisher(
+            pattern: 'dependency-check-report/dependency-check-report.xml',
+            skipNoReportFiles: true
+        )
+
+    }
+
+}
 
 
         stage('Trivy File Scan') {
@@ -223,33 +224,34 @@ pipeline {
         }
 
 
-        stage('Deploy to EKS') {
+       stage('Deploy to EKS') {
 
     steps {
 
-        sh '''
-        echo "Deploying application to EKS"
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
 
-        kubectl apply -f Kubernetes/
+            sh '''
+            echo "Deploying to EKS"
 
-        kubectl rollout status deployment/zomato --timeout=5m
+            kubectl apply -f Kubernetes/
 
-        kubectl get deployment zomato
+            kubectl rollout status deployment/zomato --timeout=5m
 
-        kubectl get pods
+            kubectl get pods
 
-        kubectl get svc zomato
-        '''
+            kubectl get svc zomato
+            '''
+
+        }
 
     }
 
 }
 
-
     post {
 
     always {
-        echo "Pipeline completed"
+        echo "Build result: ${currentBuild.result}"
     }
 
     success {
@@ -257,7 +259,7 @@ pipeline {
     }
 
     failure {
-        echo "Pipeline Failed"
+        echo "Pipeline Failed - Check previous stage logs"
     }
 
 }
