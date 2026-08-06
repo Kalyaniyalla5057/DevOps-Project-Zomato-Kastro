@@ -8,10 +8,11 @@ pipeline {
     }
 
     environment {
-    AWS_REGION = "ap-south-1"
-    IMAGE_NAME = "zomato-kastro"
-    ECR_REPO = "267673636065.dkr.ecr.ap-south-1.amazonaws.com/zomato-kastro"
-}
+        AWS_REGION = 'ap-south-1'
+        IMAGE_NAME = 'zomato-kastro'
+        AWS_ACCOUNT_ID = '267673636065'
+        ECR_REPO = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/zomato-kastro"
+    }
 
     stages {
 
@@ -24,8 +25,8 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'master',
-                url: 'https://github.com/Kalyaniyalla5057/DevOps-Project-Zomato-Kastro.git',
-                credentialsId: 'github-creds'
+                credentialsId: 'github-creds',
+                url: 'https://github.com/Kalyaniyalla5057/DevOps-Project-Zomato-Kastro.git'
             }
         }
 
@@ -45,97 +46,113 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh '''
-                npm install
-                '''
+                sh 'npm install'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
+                script {
 
-                withSonarQubeEnv('sonarqube') {
+                    def scannerHome = tool 'sonar-scanner'
 
-                    sh """
-                    ${SCANNER_HOME}/bin/sonar-scanner \
-                    -Dsonar.projectKey=zomato-kastro \
-                    -Dsonar.projectName=zomato-kastro \
-                    -Dsonar.sources=src
-                    """
+                    withSonarQubeEnv('sonarqube') {
 
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=zomato-kastro \
+                        -Dsonar.projectName=zomato-kastro \
+                        -Dsonar.sources=src
+                        """
+
+                    }
                 }
-
             }
         }
 
         stage('Quality Gate') {
-    steps {
-        echo "Skipping Quality Gate"
-    }
-}
+            steps {
+                echo "Skipping Quality Gate"
+            }
+        }
 
         stage('OWASP Dependency Check') {
-    steps {
-        dependencyCheck(
-            additionalArguments: '--scan ./',
-            odcInstallation: 'dependency-check'
-        )
-    }
-}
-
-stage('Publish OWASP Report') {
-    steps {
-        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-    }
-}
-
-        stage('Trivy File Scan') {
-
             steps {
 
+                dependencyCheck(
+                    odcInstallation: 'dependency-check',
+                    additionalArguments: '--scan ./ --format HTML --format XML',
+                    stopBuild: false
+                )
+
+            }
+        }
+
+        stage('Publish OWASP Report') {
+            steps {
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+
+        stage('Trivy File Scan') {
+            steps {
                 sh '''
                 trivy fs . --no-progress
                 '''
-
             }
-
         }
 
         stage('Build Docker Image') {
-
             steps {
-
                 sh '''
                 docker build -t ${IMAGE_NAME}:latest .
                 '''
-
             }
-
         }
 
         stage('Trivy Image Scan') {
-
             steps {
-
                 sh '''
                 trivy image ${IMAGE_NAME}:latest --no-progress
                 '''
-
             }
-
         }
 
         stage('Login to AWS ECR') {
 
             steps {
 
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
-                credentialsId: 'aws-creds']]) {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
 
                     sh '''
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login \
+                    --username AWS \
+                    --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    '''
 
-                    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
+                }
 
+            }
+
+        }
+
+        stage('Verify ECR Repository') {
+
+            steps {
+
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+
+                    sh '''
+                    aws ecr describe-repositories \
+                    --repository-names zomato-kastro \
+                    --region ${AWS_REGION}
                     '''
 
                 }
@@ -149,9 +166,7 @@ stage('Publish OWASP Report') {
             steps {
 
                 sh '''
-
                 docker tag ${IMAGE_NAME}:latest ${ECR_REPO}:latest
-
                 '''
 
             }
@@ -163,9 +178,7 @@ stage('Publish OWASP Report') {
             steps {
 
                 sh '''
-
                 docker push ${ECR_REPO}:latest
-
                 '''
 
             }
@@ -177,11 +190,9 @@ stage('Publish OWASP Report') {
             steps {
 
                 sh '''
-
                 kubectl apply -f Kubernetes/
 
                 kubectl rollout status deployment/zomato
-
                 '''
 
             }
@@ -193,15 +204,11 @@ stage('Publish OWASP Report') {
     post {
 
         success {
-
             echo 'Pipeline Executed Successfully'
-
         }
 
         failure {
-
             echo 'Pipeline Failed'
-
         }
 
     }
