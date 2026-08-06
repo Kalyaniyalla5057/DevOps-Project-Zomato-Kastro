@@ -208,23 +208,23 @@ pipeline {
 
         stage('Push Docker Image') {
 
-OAOAOAOAOAOA            steps {
-OAOA
-OA                sh '''
-OA                docker push ${ECR_REPO}:latest
-OAOAOA                '''
-OAOAOAOAOA
-            }
-OA
-        }
-OA
-
-        stage('Deploy to EKS') {
-OAOA
             steps {
 
                 sh '''
-OA                kubectl apply -f Kubernetes/
+                docker push ${ECR_REPO}:latest
+                '''
+
+            }
+
+        }
+
+
+        stage('Deploy to EKS') {
+
+            steps {
+
+                sh '''
+                kubectl apply -f Kubernetes/
 
                 kubectl rollout status deployment/zomato --timeout=5m
 
