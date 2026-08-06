@@ -250,8 +250,6 @@ pipeline {
 
     }
 
-}
-
 post {
 
     always {
