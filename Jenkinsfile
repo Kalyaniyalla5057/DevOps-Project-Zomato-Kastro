@@ -228,21 +228,23 @@ pipeline {
 
     steps {
 
-        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+        sh '''
+        set -x
 
-            sh '''
-            echo "Deploying to EKS"
+        aws eks update-kubeconfig \
+        --region ${AWS_REGION} \
+        --name zomato-kastro-eks-v1
 
-            kubectl apply -f Kubernetes/
+        kubectl apply -f Kubernetes/
 
-            kubectl rollout status deployment/zomato --timeout=5m
+        kubectl rollout status deployment/zomato --timeout=5m
 
-            kubectl get pods
+        kubectl get pods -o wide
 
-            kubectl get svc zomato
-            '''
+        kubectl get svc zomato
 
-        }
+        echo "EKS Deployment Completed Successfully"
+        '''
 
     }
 
@@ -250,16 +252,18 @@ pipeline {
 
     post {
 
-    always {
-        echo "Build result: ${currentBuild.result}"
-    }
+        always {
+            echo "Build result: ${currentBuild.result}"
+        }
 
-    success {
-        echo "Pipeline Executed Successfully"
-    }
+        success {
+            echo "Pipeline Executed Successfully"
+        }
 
-    failure {
-        echo "Pipeline Failed - Check previous stage logs"
+        failure {
+            echo "Pipeline Failed - Check previous stage logs"
+        }
+
     }
 
 }
