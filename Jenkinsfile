@@ -189,11 +189,9 @@ pipeline {
 
             steps {
 
-                sh '''
-                kubectl apply -f Kubernetes/
+                sh 'kubectl apply -f Kubernetes/'
 
-                kubectl rollout status deployment/zomato
-                '''
+                sh  'kubectl rollout status deployment/zomato'
 
             }
 
