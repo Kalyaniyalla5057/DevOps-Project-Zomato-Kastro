@@ -8,17 +8,10 @@ pipeline {
     }
 
     environment {
-
-        SCANNER_HOME = tool 'sonar-scanner'
-
-        AWS_REGION = "ap-south-1"
-
-        AWS_ACCOUNT_ID = "267673636065"
-
-        IMAGE_NAME = "zomato-kastro"
-
-        ECR_REPO = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}"
-    }
+    AWS_REGION = "ap-south-1"
+    IMAGE_NAME = "zomato-kastro"
+    ECR_REPO = "267673636065.dkr.ecr.ap-south-1.amazonaws.com/zomato-kastro"
+}
 
     stages {
 
