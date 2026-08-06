@@ -1,108 +1,237 @@
 pipeline {
+
     agent any
+
     tools {
-        jdk 'jdk21'
+        jdk 'java21'
         nodejs 'node20'
     }
+
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
+
+        SCANNER_HOME = tool 'sonar-scanner'
+
+        AWS_REGION = "ap-south-1"
+
+        AWS_ACCOUNT_ID = "267673636065"
+
+        IMAGE_NAME = "zomato-kastro"
+
+        ECR_REPO = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}"
     }
+
     stages {
-        stage ("clean workspace") {
+
+        stage('Clean Workspace') {
             steps {
                 cleanWs()
             }
         }
-        stage ("Git Checkout") {
+
+        stage('Checkout Code') {
             steps {
-                git 'https://github.com/KastroVKiran/Zomato-Project-Kastro.git'
+                git branch: 'master',
+                url: 'https://github.com/Kalyaniyalla5057/DevOps-Project-Zomato-Kastro.git',
+                credentialsId: 'github-creds'
             }
         }
-        stage("Sonarqube Analysis"){
-            steps{
-                withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=zomato \
-                    -Dsonar.projectKey=zomato '''
+
+        stage('Check Versions') {
+            steps {
+                sh '''
+                java -version
+                node -v
+                npm -v
+                docker --version
+                kubectl version --client
+                eksctl version
+                trivy --version
+                '''
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh '''
+                npm install
+                '''
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+
+                withSonarQubeEnv('sonarqube') {
+
+                    sh """
+                    ${SCANNER_HOME}/bin/sonar-scanner \
+                    -Dsonar.projectKey=zomato-kastro \
+                    -Dsonar.projectName=zomato-kastro \
+                    -Dsonar.sources=src
+                    """
+
                 }
+
             }
         }
-        stage("Code Quality Gate"){
-           steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+
+        stage('Quality Gate') {
+
+            steps {
+
+                timeout(time: 5, unit: 'MINUTES') {
+
+                    waitForQualityGate abortPipeline: true
+
                 }
-            } 
-        }
-        stage("Install NPM Dependencies") {
-            steps {
-                sh "npm install"
+
             }
+
         }
-        stage('OWASP FS SCAN') {
+
+        stage('OWASP Dependency Check') {
+
             steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit -n', odcInstallation: 'DP-Check'
+
+                dependencyCheck(
+
+                    odcInstallation: 'dependency-check',
+
+                    additionalArguments: '--scan ./ --format XML',
+
+                    stopBuild: true
+
+                )
+
+            }
+
+        }
+
+        stage('Publish OWASP Report') {
+
+            steps {
+
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-    }
-}
-        stage ("Trivy File Scan") {
-            steps {
-                sh "trivy fs . > trivy.txt"
+
             }
+
         }
-        stage ("Build Docker Image") {
+
+        stage('Trivy File Scan') {
+
             steps {
-                sh "docker build -t zomato ."
+
+                sh '''
+                trivy fs . --no-progress
+                '''
+
             }
+
         }
-        stage ("Tag & Push to DockerHub") {
+
+        stage('Build Docker Image') {
+
             steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker') {
-                        sh "docker tag zomato kastrov/zomato:latest "
-                        sh "docker push kastrov/zomato:latest "
-                    }
+
+                sh '''
+                docker build -t ${IMAGE_NAME}:latest .
+                '''
+
+            }
+
+        }
+
+        stage('Trivy Image Scan') {
+
+            steps {
+
+                sh '''
+                trivy image ${IMAGE_NAME}:latest --no-progress
+                '''
+
+            }
+
+        }
+
+        stage('Login to AWS ECR') {
+
+            steps {
+
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                credentialsId: 'aws-creds']]) {
+
+                    sh '''
+
+                    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
+
+                    '''
+
                 }
+
             }
+
         }
-        stage('Docker Scout Image') {
+
+        stage('Tag Docker Image') {
+
             steps {
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                       sh 'docker-scout quickview kastrov/zomato:latest'
-                       sh 'docker-scout cves kastrov/zomato:latest'
-                       sh 'docker-scout recommendations kastrov/zomato:latest'
-                   }
-                }
+
+                sh '''
+
+                docker tag ${IMAGE_NAME}:latest ${ECR_REPO}:latest
+
+                '''
+
             }
+
         }
-        stage ("Deploy to Container") {
+
+        stage('Push Docker Image') {
+
             steps {
-                sh 'docker run -d --name zomato -p 3000:3000 kastrov/zomato:latest'
+
+                sh '''
+
+                docker push ${ECR_REPO}:latest
+
+                '''
+
             }
+
         }
+
+        stage('Deploy to EKS') {
+
+            steps {
+
+                sh '''
+
+                kubectl apply -f Kubernetes/
+
+                kubectl rollout status deployment/zomato
+
+                '''
+
+            }
+
+        }
+
     }
+
     post {
-    always {
-        emailext attachLog: true,
-            subject: "'${currentBuild.result}'",
-            body: """
-                <html>
-                <body>
-                    <div style="background-color: #FFA07A; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">Project: ${env.JOB_NAME}</p>
-                    </div>
-                    <div style="background-color: #90EE90; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">Build Number: ${env.BUILD_NUMBER}</p>
-                    </div>
-                    <div style="background-color: #87CEEB; padding: 10px; margin-bottom: 10px;">
-                        <p style="color: white; font-weight: bold;">URL: ${env.BUILD_URL}</p>
-                    </div>
-                </body>
-                </html>
-            """,
-            to: 'kastrokiran@gmail.com',
-            mimeType: 'text/html',
-            attachmentsPattern: 'trivy.txt'
+
+        success {
+
+            echo 'Pipeline Executed Successfully'
+
         }
+
+        failure {
+
+            echo 'Pipeline Failed'
+
+        }
+
     }
+
 }
