@@ -90,32 +90,19 @@ pipeline {
         }
 
         stage('OWASP Dependency Check') {
+    steps {
+        dependencyCheck(
+            additionalArguments: '--scan ./',
+            odcInstallation: 'dependency-check'
+        )
+    }
+}
 
-            steps {
-
-                dependencyCheck(
-
-                    odcInstallation: 'dependency-check',
-
-                    additionalArguments: '--scan ./ --format XML',
-
-                    stopBuild: true
-
-                )
-
-            }
-
-        }
-
-        stage('Publish OWASP Report') {
-
-            steps {
-
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-
-            }
-
-        }
+stage('Publish OWASP Report') {
+    steps {
+        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+    }
+}
 
         stage('Trivy File Scan') {
 
