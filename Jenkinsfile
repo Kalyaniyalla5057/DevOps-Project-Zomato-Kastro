@@ -1,6 +1,10 @@
 pipeline {
 
     agent any
+     
+    options {
+    timestamps()
+}
 
     tools {
         jdk 'java21'
@@ -221,37 +225,39 @@ pipeline {
 
         stage('Deploy to EKS') {
 
-            steps {
+    steps {
 
-                sh '''
-                kubectl apply -f Kubernetes/
+        sh '''
+        echo "Deploying application to EKS"
 
-                kubectl rollout status deployment/zomato --timeout=5m
+        kubectl apply -f Kubernetes/
 
-                kubectl get pods
-                '''
+        kubectl rollout status deployment/zomato --timeout=5m
 
-            }
+        kubectl get deployment zomato
 
-        }
+        kubectl get pods
+
+        kubectl get svc zomato
+        '''
 
     }
+
+}
 
 
     post {
 
-        success {
+    always {
+        echo "Pipeline completed"
+    }
 
-            echo 'Pipeline Executed Successfully'
+    success {
+        echo "Pipeline Executed Successfully"
+    }
 
-        }
-
-        failure {
-
-            echo 'Pipeline Failed'
-
-        }
-
+    failure {
+        echo "Pipeline Failed"
     }
 
 }
