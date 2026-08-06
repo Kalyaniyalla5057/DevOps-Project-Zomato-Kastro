@@ -22,6 +22,7 @@ pipeline {
             }
         }
 
+
         stage('Checkout Code') {
             steps {
                 git branch: 'master',
@@ -29,6 +30,7 @@ pipeline {
                 url: 'https://github.com/Kalyaniyalla5057/DevOps-Project-Zomato-Kastro.git'
             }
         }
+
 
         stage('Check Versions') {
             steps {
@@ -44,14 +46,17 @@ pipeline {
             }
         }
 
+
         stage('Install Dependencies') {
             steps {
                 sh 'npm install'
             }
         }
 
+
         stage('SonarQube Analysis') {
             steps {
+
                 script {
 
                     def scannerHome = tool 'sonar-scanner'
@@ -66,9 +71,12 @@ pipeline {
                         """
 
                     }
+
                 }
+
             }
         }
+
 
         stage('Quality Gate') {
             steps {
@@ -76,44 +84,69 @@ pipeline {
             }
         }
 
-        dependencyCheck(
-    odcInstallation: 'dependency-check',
-    additionalArguments: '--scan ./ --format HTML --format XML',
-    stopBuild: false
-)
+
+        stage('OWASP Dependency Check') {
+            steps {
+
+                dependencyCheck(
+                    odcInstallation: 'dependency-check',
+                    additionalArguments: '''
+                    --scan .
+                    --format XML
+                    --format HTML
+                    --out dependency-check-report
+                    ''',
+                    stopBuild: false
+                )
+
+            }
+        }
+
 
         stage('Publish OWASP Report') {
-    steps {
-        dependencyCheckPublisher(
-            pattern: '**/dependency-check-report.xml',
-            skipNoReportFiles: true
-        )
-    }
-}
+            steps {
+
+                dependencyCheckPublisher(
+                    pattern: 'dependency-check-report/dependency-check-report.xml',
+                    skipNoReportFiles: true
+                )
+
+            }
+        }
+
 
         stage('Trivy File Scan') {
             steps {
+
                 sh '''
                 trivy fs . --no-progress
                 '''
+
             }
         }
+
 
         stage('Build Docker Image') {
             steps {
+
                 sh '''
                 docker build -t ${IMAGE_NAME}:latest .
                 '''
+
             }
         }
 
+
         stage('Trivy Image Scan') {
             steps {
+
                 sh '''
                 trivy image ${IMAGE_NAME}:latest --no-progress
                 '''
+
             }
         }
+
 
         stage('Login to AWS ECR') {
 
@@ -137,6 +170,7 @@ pipeline {
 
         }
 
+
         stage('Verify ECR Repository') {
 
             steps {
@@ -158,6 +192,7 @@ pipeline {
 
         }
 
+
         stage('Tag Docker Image') {
 
             steps {
@@ -170,25 +205,31 @@ pipeline {
 
         }
 
+
         stage('Push Docker Image') {
 
+OAOAOAOAOAOA            steps {
+OAOA
+OA                sh '''
+OA                docker push ${ECR_REPO}:latest
+OAOAOA                '''
+OAOAOAOAOA
+            }
+OA
+        }
+OA
+
+        stage('Deploy to EKS') {
+OAOA
             steps {
 
                 sh '''
-                docker push ${ECR_REPO}:latest
+OA                kubectl apply -f Kubernetes/
+
+                kubectl rollout status deployment/zomato --timeout=5m
+
+                kubectl get pods
                 '''
-
-            }
-
-        }
-
-        stage('Deploy to EKS') {
-
-            steps {
-
-                sh 'kubectl apply -f Kubernetes/'
-
-                sh  'kubectl rollout status deployment/zomato'
 
             }
 
@@ -196,14 +237,19 @@ pipeline {
 
     }
 
+
     post {
 
         success {
+
             echo 'Pipeline Executed Successfully'
+
         }
 
         failure {
+
             echo 'Pipeline Failed'
+
         }
 
     }
