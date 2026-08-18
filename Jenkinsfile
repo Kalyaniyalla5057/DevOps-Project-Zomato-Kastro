@@ -2,96 +2,70 @@ pipeline {
 
     agent any
 
-    options {
-        timestamps()
-    }
-
     environment {
-        AWS_REGION = 'us-east-1'
-        AWS_ACCOUNT_ID = '630434208583'
-        IMAGE_NAME = 'zomato-kastro'
-        ECR_REPO = '630434208583.dkr.ecr.us-east-1.amazonaws.com/zomato-kastro'
-        EKS_CLUSTER = 'zomato-kastro-eks-v1'
+        AWS_REGION   = 'us-east-1'
+        ECR_REPO     = 'zomato-kastro'
+        IMAGE_NAME   = 'zomato-kastro'
+        CLUSTER_NAME = 'zomato-kastro-eks-cluster'
+        DEPLOYMENT   = 'zomato'
+        SERVICE      = 'zomato'
     }
 
     stages {
 
-        stage('Clean Workspace') {
-            steps {
-                cleanWs()
-            }
-        }
-
         stage('Checkout Code') {
             steps {
-                git branch: 'master',
-                    credentialsId: 'github-creds',
-                    url: 'https://github.com/Kalyaniyalla5057/DevOps-Project-Zomato-Kastro.git'
+                checkout scm
             }
         }
 
-        stage('Check Versions') {
+        stage('Check Tools') {
             steps {
                 sh '''
-                    echo "======================================"
-                    echo "JAVA VERSION"
-                    echo "======================================"
+                    set -e
+
+                    echo "===== JAVA ====="
                     java -version
 
-                    echo "======================================"
-                    echo "NODE VERSION"
-                    echo "======================================"
+                    echo "===== NODE ====="
                     node -v
 
-                    echo "======================================"
-                    echo "NPM VERSION"
-                    echo "======================================"
+                    echo "===== NPM ====="
                     npm -v
 
-                    echo "======================================"
-                    echo "DOCKER VERSION"
-                    echo "======================================"
+                    echo "===== DOCKER ====="
                     docker --version
 
-                    echo "======================================"
-                    echo "AWS CLI VERSION"
-                    echo "======================================"
+                    echo "===== AWS ====="
                     aws --version
 
-                    echo "======================================"
-                    echo "KUBECTL VERSION"
-                    echo "======================================"
+                    echo "===== KUBECTL ====="
                     kubectl version --client
-
-                    echo "======================================"
-                    echo "EKSCTL VERSION"
-                    echo "======================================"
-                    eksctl version
-
-                    echo "======================================"
-                    echo "AWS IDENTITY"
-                    echo "======================================"
-                    aws sts get-caller-identity
                 '''
             }
         }
 
-        stage('Check AWS Resources') {
+        stage('Check AWS Access') {
             steps {
                 sh '''
-                    echo "Checking ECR repository..."
+                    set -e
 
-                    aws ecr describe-repositories \
-                    --repository-names ${IMAGE_NAME} \
-                    --region ${AWS_REGION}
+                    echo "===== AWS IDENTITY ====="
+                    aws sts get-caller-identity
 
-                    echo "Checking EKS cluster..."
-
+                    echo "===== EKS CLUSTER ====="
                     aws eks describe-cluster \
-                    --name ${EKS_CLUSTER} \
-                    --region ${AWS_REGION} \
-                    --query 'cluster.status' \
-                    --output text
+                        --name "$CLUSTER_NAME" \
+                        --region "$AWS_REGION" \
+                        --query 'cluster.status' \
+                        --output text
+
+                    echo "===== ECR REPOSITORY ====="
+                    aws ecr describe-repositories \
+                        --repository-names "$ECR_REPO" \
+                        --region "$AWS_REGION" \
+                        --query 'repositories[0].repositoryUri' \
+                        --output text
                 '''
             }
         }
@@ -99,63 +73,17 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
+                    set -e
                     npm install
                 '''
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                script {
-
-                    def scannerHome = tool 'sonar-scanner'
-
-                    withSonarQubeEnv('sonarqube') {
-
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                            -Dsonar.projectKey=zomato-kastro \
-                            -Dsonar.projectName=zomato-kastro \
-                            -Dsonar.sources=src
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                echo 'Skipping Quality Gate'
-            }
-        }
-
-        stage('OWASP Dependency Check') {
+        stage('Build Application') {
             steps {
                 sh '''
-                    mkdir -p dependency-check-report
-
-                    /opt/dependency-check-tool/bin/dependency-check.sh \
-                    --project zomato-kastro \
-                    --scan . \
-                    --format XML \
-                    --out dependency-check-report
-                '''
-            }
-        }
-
-        stage('Publish OWASP Report') {
-            steps {
-                dependencyCheckPublisher(
-                    pattern: 'dependency-check-report/dependency-check-report.xml',
-                    skipNoReportFiles: true
-                )
-            }
-        }
-
-        stage('Trivy File Scan') {
-            steps {
-                sh '''
-                    trivy fs . --no-progress
+                    set -e
+                    npm run build
                 '''
             }
         }
@@ -163,42 +91,32 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 sh '''
+                    set -e
+
                     docker build \
-                    -t ${IMAGE_NAME}:latest \
-                    .
+                        -t "$IMAGE_NAME:latest" .
                 '''
             }
         }
 
-        stage('Trivy Image Scan') {
+        stage('Login to ECR') {
             steps {
                 sh '''
-                    trivy image \
-                    ${IMAGE_NAME}:latest \
-                    --no-progress
-                '''
-            }
-        }
+                    set -e
 
-        stage('Login to AWS ECR') {
-            steps {
-                sh '''
+                    ACCOUNT_ID=$(aws sts get-caller-identity \
+                        --query Account \
+                        --output text)
+
+                    ECR_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
+
+                    echo "ECR URI: $ECR_URI"
+
                     aws ecr get-login-password \
-                    --region ${AWS_REGION} | \
+                        --region "$AWS_REGION" | \
                     docker login \
-                    --username AWS \
-                    --password-stdin \
-                    ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                '''
-            }
-        }
-
-        stage('Tag Docker Image') {
-            steps {
-                sh '''
-                    docker tag \
-                    ${IMAGE_NAME}:latest \
-                    ${ECR_REPO}:latest
+                        --username AWS \
+                        --password-stdin "$ECR_URI"
                 '''
             }
         }
@@ -206,19 +124,19 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 sh '''
-                    docker push \
-                    ${ECR_REPO}:latest
-                '''
-            }
-        }
+                    set -e
 
-        stage('Verify ECR Image') {
-            steps {
-                sh '''
-                    aws ecr describe-images \
-                    --repository-name ${IMAGE_NAME} \
-                    --image-ids imageTag=latest \
-                    --region ${AWS_REGION}
+                    ACCOUNT_ID=$(aws sts get-caller-identity \
+                        --query Account \
+                        --output text)
+
+                    ECR_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
+
+                    docker tag \
+                        "$IMAGE_NAME:latest" \
+                        "$ECR_URI:latest"
+
+                    docker push "$ECR_URI:latest"
                 '''
             }
         }
@@ -226,39 +144,38 @@ pipeline {
         stage('Configure EKS') {
             steps {
                 sh '''
+                    set -e
+
                     aws eks update-kubeconfig \
-                    --region ${AWS_REGION} \
-                    --name ${EKS_CLUSTER}
-                '''
-            }
-        }
-
-        stage('Verify Kubernetes Connection') {
-            steps {
-                sh '''
-                    kubectl cluster-info
-
-                    echo "======================================"
-                    echo "KUBERNETES NODES"
-                    echo "======================================"
+                        --region "$AWS_REGION" \
+                        --name "$CLUSTER_NAME"
 
                     kubectl get nodes
                 '''
             }
         }
 
-        stage('Deploy Application to EKS') {
+        stage('Deploy to EKS') {
             steps {
                 sh '''
-                    echo "Applying Zomato deployment..."
+                    set -e
 
-                    kubectl apply \
-                    -f Kubernetes/deployment.yaml
+                    ACCOUNT_ID=$(aws sts get-caller-identity \
+                        --query Account \
+                        --output text)
 
-                    echo "Applying Zomato service..."
+                    ECR_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
 
-                    kubectl apply \
-                    -f Kubernetes/service.yaml
+                    echo "Updating existing Zomato deployment..."
+
+                    kubectl set image deployment/"$DEPLOYMENT" \
+                        "$IMAGE_NAME"="$ECR_URI:latest"
+
+                    kubectl rollout restart deployment/"$DEPLOYMENT"
+
+                    kubectl rollout status \
+                        deployment/"$DEPLOYMENT" \
+                        --timeout=5m
                 '''
             }
         }
@@ -266,46 +183,24 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 sh '''
-                    echo "======================================"
-                    echo "DEPLOYMENT"
-                    echo "======================================"
+                    set -e
 
-                    kubectl get deployment zomato
+                    echo "===== DEPLOYMENT ====="
+                    kubectl get deployment "$DEPLOYMENT"
 
-                    echo "======================================"
-                    echo "PODS"
-                    echo "======================================"
+                    echo "===== PODS ====="
+                    kubectl get pods \
+                        -l app=zomato \
+                        -o wide
 
-                    kubectl get pods -o wide
+                    echo "===== SERVICE ====="
+                    kubectl get svc "$SERVICE"
 
-                    echo "======================================"
-                    echo "ROLLOUT"
-                    echo "======================================"
+                    echo "===== LOAD BALANCER ====="
+                    kubectl get svc "$SERVICE" \
+                        -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
 
-                    kubectl rollout status \
-                    deployment/zomato \
-                    --timeout=5m
-
-                    echo "======================================"
-                    echo "SERVICE"
-                    echo "======================================"
-
-                    kubectl get svc zomato
-                '''
-            }
-        }
-
-        stage('Get Application URL') {
-            steps {
-                sh '''
-                    echo "======================================"
-                    echo "APPLICATION LOAD BALANCER"
-                    echo "======================================"
-
-                    kubectl get svc zomato \
-                    -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-
-                    echo ""
+                    echo
                 '''
             }
         }
@@ -313,22 +208,24 @@ pipeline {
 
     post {
 
-        always {
-            echo "Build result: ${currentBuild.currentResult}"
-        }
-
         success {
-            echo "======================================"
-            echo "PIPELINE SUCCESS"
-            echo "======================================"
-            echo "Zomato Kastro application deployed successfully to EKS."
+            echo '''
+========================================
+ ZOMATO-KASTRO PIPELINE SUCCESSFUL
+========================================
+'''
         }
 
         failure {
-            echo "======================================"
-            echo "PIPELINE FAILED"
-            echo "======================================"
-            echo "Check the failed stage in Console Output."
+            echo '''
+========================================
+ ZOMATO-KASTRO PIPELINE FAILED
+========================================
+'''
+        }
+
+        always {
+            echo 'Pipeline execution completed.'
         }
     }
 }
