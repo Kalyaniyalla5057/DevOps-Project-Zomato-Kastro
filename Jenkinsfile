@@ -156,29 +156,31 @@ pipeline {
         }
 
         stage('Deploy to EKS') {
-            steps {
-                sh '''
-                    set -e
+    steps {
+        sh '''
+            set -e
 
-                    ACCOUNT_ID=$(aws sts get-caller-identity \
-                        --query Account \
-                        --output text)
+            ACCOUNT_ID=$(aws sts get-caller-identity \
+                --query Account \
+                --output text)
 
-                    ECR_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
+            ECR_URI="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO"
 
-                    echo "Updating existing Zomato deployment..."
+            echo "Updating existing Zomato deployment..."
 
-                    kubectl set image deployment/"$DEPLOYMENT" \
-                        "$IMAGE_NAME"="$ECR_URI:latest"
+            kubectl set image deployment/"$DEPLOYMENT" \
+                zomato="$ECR_URI:latest"
 
-                    kubectl rollout restart deployment/"$DEPLOYMENT"
+            kubectl rollout restart deployment/"$DEPLOYMENT"
 
-                    kubectl rollout status \
-                        deployment/"$DEPLOYMENT" \
-                        --timeout=5m
-                '''
-            }
-        }
+            kubectl rollout status \
+                deployment/"$DEPLOYMENT" \
+                --timeout=5m
+
+            echo "Deployment completed successfully"
+        '''
+    }
+}
 
         stage('Verify Deployment') {
             steps {
