@@ -12,7 +12,8 @@ function App() {
     <div className="App">
       <Header />
       <Card />
-<h2>Developer 2 - Special Offers</h2>
+      <h2>Developer 1 - Special Offers</h2>
+      <h2>Developer 2 - Special Offers</h2>
       <Collection />
       <Cities />
       <CTA />
