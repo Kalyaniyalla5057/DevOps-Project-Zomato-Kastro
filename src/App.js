@@ -11,6 +11,7 @@ function App() {
   return (
     <div className="App">
       <Header />
+      <h2>Developer 1 - Header and Navigation Update</h2>
       <Card />
       <Collection />
       <Cities />
