@@ -1,21 +1,28 @@
 apiVersion: apps/v1
 kind: Deployment
+
 metadata:
   name: zomato
   labels:
     app: zomato
+
 spec:
   replicas: 2
+
   selector:
     matchLabels:
       app: zomato
+
   template:
     metadata:
       labels:
         app: zomato
+
     spec:
       containers:
       - name: zomato
-        image: yaswanth032/zomato:latest
+        image: 630434208583.dkr.ecr.us-east-1.amazonaws.com/zomato-kastro:latest
+        imagePullPolicy: Always
+
         ports:
         - containerPort: 3000
