@@ -13,6 +13,7 @@ function App() {
       <Header />
       <Card />
 <h2>Developer 1 - Special Offers</h2>
+<p>Fresh food and great deals!</p>
 <Collection />
       <Cities />
       <CTA />
