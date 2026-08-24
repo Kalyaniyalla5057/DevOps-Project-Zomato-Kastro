@@ -12,7 +12,8 @@ function App() {
     <div className="App">
       <Header />
       <Card />
-      <Collection />
+<h2>Developer 1 - Special Offers</h2>
+<Collection />
       <Cities />
       <CTA />
       <AccContainer />
