@@ -12,7 +12,6 @@ function App() {
 <div className="App">
 <Header />
 
-<h2>Developer 4 - Restaurant experience Update</h2>
 <Card />
 
  
@@ -21,7 +20,8 @@ function App() {
 <h2>Developer 3 - Restaurant Collection Update</h2>
 
 <h2>Developer 2 - Food Discovery Update</h2>
- 
+<h2>Developer 4 - Restaurant experience Update</h2>
+
       <Card />
 
 <Collection />
