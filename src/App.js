@@ -6,20 +6,23 @@ import CTA from "./components/CTA/CTA";
 import Cities from "./components/Cities/Cities";
 import Collection from "./components/Collections/Collection";
 import Card from "./components/Card/Card";
-
+ 
 function App() {
   return (
-    <div className="App">
-      <Header />
+<div className="App">
+<Header />
+ 
       <h2>Developer 1 - Header and Navigation Update</h2>
+<h2>Developer 2 - Food Discovery Update</h2>
+ 
       <Card />
-      <Collection />
-      <Cities />
-      <CTA />
-      <AccContainer />
-      <Footer />
-    </div>
+<Collection />
+<Cities />
+<CTA />
+<AccContainer />
+<Footer />
+</div>
   );
 }
-
+ 
 export default App;
