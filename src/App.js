@@ -13,6 +13,9 @@ function App() {
 <Header />
  
       <h2>Developer 1 - Header and Navigation Update</h2>
+
+<h2>Developer 3 - Restaurant Collection Update</h2>
+
 <h2>Developer 2 - Food Discovery Update</h2>
  
       <Card />
