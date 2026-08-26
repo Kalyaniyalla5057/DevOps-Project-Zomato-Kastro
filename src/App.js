@@ -18,6 +18,7 @@ function App() {
       <Cities />
       <CTA />
       <AccContainer />
+      <h2>Advanced Git Demo - Developer 2</h2>
       <Footer />
     </div>
   );
